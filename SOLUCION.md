@@ -213,24 +213,28 @@ Mi propuesta a la dirección:
 
 ## 11. Uso de IA
 
-<!-- Revisar y ajustar a tu experiencia real antes de entregar. -->
+Usé **Claude** (claude.ai) como asistente de construcción durante todo el reto. Mi rol fue dirigir, decidir y probar; el de Claude, proponer diseño, escribir código y documentación, y verificarlos.
 
-Usé **Claude** (claude.ai) como asistente durante todo el reto:
+**Para qué lo usé:**
 
-- **Lectura y elección del reto:** comparé los tres PRD y elegí el 03 por tener reglas deterministas y casos de prueba explícitos.
-- **Diseño:** arquitectura, separación comportamiento / conocimiento / ejecución, y la decisión de que las herramientas sean la única fuente de valores.
-- **Código:** dominio, herramientas, ciclo, servidor y front, construidos por capas y verificados en cada paso con `demo.ts`, `scripts/prueba-ciclo.ts` y `tsc` en modo estricto.
-- **Documentación:** README y este documento.
+- **Diseño:** arquitectura, separación comportamiento / conocimiento / ejecución, y el principio de que las herramientas son la única fuente de valores.
+- **Código:** dominio, herramientas, ciclo del agente, servidor y front, construidos por capas y verificados en cada paso con `demo.ts`, `scripts/prueba-ciclo.ts` y `tsc` en modo estricto.
 
-Lo que se descartó o corrigió de lo propuesto:
+**Decisiones que tomé yo:**
+
+- **Elegir el reto:** comparé los tres PRD y elegí el 03 porque sus reglas son deterministas y sus casos de prueba tienen resultado esperado explícito, lo que permite verificar sin ambigüedad.
+- **Elegir el modelo:** Usar el nivel gratuito de Gemini para el link público en lugar de un proveedor de pago, lo que obligó a agregar un segundo adaptador. Eso terminó demostrando que cambiar de proveedor no toca el ciclo del agente.
+- **Despliegue:** Desplegar en Render desde GitHub, con clave de acceso para proteger el link.
+
+**Lo que se descartó o corrigió:**
 
 - Confiar en el payload que envía el modelo: se cambió por releer y comparar (decisión 1).
 - Librerías de markdown por CDN: se reemplazaron por un renderizador propio (decisión 6).
-- El primer recorte de la descripción a 40 caracteres dejaba textos como "…para la mesa de": se corrigió para no terminar en conectores.
-- La primera recomendación de RC2 en `sol-003` no decía que ningún aprobador de CC-2020 tenía tope suficiente; se agregó.
-- En las pruebas sobre el link desplegado apareció un error: la usuaria respondió "Sí" y el backend no lo reconoció, porque el límite de palabra `\b` de JavaScript no trata la "í" como letra. El modelo reintentó, la herramienta lo rechazó tres veces, y aun así escribió que la OC estaba creada. Corregí el reconocimiento con expresiones Unicode y agregué un control en el backend: si en un turno `oc_crear` no creó nada, el texto del modelo no puede afirmar lo contrario y se reemplaza por el resultado real. Ambos casos quedaron como pruebas en `scripts/prueba-ciclo.ts`.
+- El alias `gemini-flash-latest` apuntaba a un modelo *preview* inestable y los modelos Gemini 3 exigían reenviar una firma de razonamiento; se fijó un modelo estable y el adaptador aprendió a reenviar la firma.
+- **Un error que encontré probando el link desplegado:** respondí "Sí" a una confirmación y el backend no lo reconoció, porque el límite de palabra `\b` de JavaScript no trata la "í" como letra. El modelo reintentó, la herramienta lo rechazó tres veces, y aun así escribió que la OC estaba creada. Se corrigió el reconocimiento con expresiones Unicode y se agregó un control en el backend: si en un turno `oc_crear` no creó nada, el texto del modelo no puede afirmar lo contrario. Ambos casos quedaron como pruebas automáticas.
 
-Revisé cada archivo y puedo explicar cada línea.
+La lección que me llevo: el modelo puede equivocarse aunque el prompt lo prohíba, por eso los controles críticos (montos, confirmación, resultados) viven en el código, no en las instrucciones.
+
 
 ## 12. Riesgos de llevar esto a producción
 
