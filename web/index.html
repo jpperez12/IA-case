@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Órdenes de compra · Agente</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Code+Pro:wght@400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --lienzo: #eef1ec; --superficie: #ffffff; --tinta: #17201e; --tenue: #5e6b67; --linea: #d5dcd6;
+    --verde: #1f6b52; --verde-suave: #e3efe9; --ambar: #a86412; --ambar-suave: #fbf0e1; --rojo: #a3302a; --rojo-suave: #f7e6e4;
+    --radio: 6px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 16px/1.5 "Source Sans 3", system-ui, sans-serif; color: var(--tinta); background: var(--lienzo); }
+  button { font: inherit; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--verde); outline-offset: 2px; }
+
+  .app { display: grid; grid-template-columns: 300px 1fr; height: 100%; }
+  aside { border-right: 1px solid var(--linea); padding: 28px 22px; overflow-y: auto; display: flex; flex-direction: column; gap: 28px; }
+  aside h1 { font-size: 1.35rem; line-height: 1.2; margin: 0 0 6px; }
+  aside p { margin: 0; color: var(--tenue); font-size: .92rem; }
+  aside h2 { font-size: .95rem; margin: 0 0 10px; }
+  .casos { display: grid; gap: 6px; }
+  .caso { text-align: left; background: var(--superficie); border: 1px solid var(--linea); border-radius: var(--radio); padding: 8px 12px; color: var(--tinta); }
+  .caso:hover { border-color: var(--verde); }
+  .caso b { display: block; font-size: .95rem; }
+  .caso span { color: var(--tenue); font-size: .85rem; }
+  .registros a { display: block; color: var(--verde); font-size: .92rem; padding: 2px 0; }
+  .estado { font-size: .85rem; color: var(--tenue); margin-top: auto; }
+  .estado button { background: none; border: 0; color: var(--verde); padding: 0; text-decoration: underline; }
+
+  main { display: grid; grid-template-rows: 1fr auto; min-height: 0; }
+  #hilo { overflow-y: auto; padding: 32px clamp(16px, 5vw, 56px) 24px; display: flex; flex-direction: column; gap: 18px; }
+  .vacio { margin: auto; max-width: 46ch; text-align: center; color: var(--tenue); }
+  .vacio strong { display: block; color: var(--tinta); font-size: 1.15rem; margin-bottom: 6px; }
+
+  .msg { max-width: 860px; width: 100%; }
+  .msg.usuario { align-self: flex-end; max-width: 620px; background: var(--tinta); color: #f4f7f5; padding: 10px 16px; border-radius: var(--radio); width: auto; }
+  .msg.asistente { background: var(--superficie); border: 1px solid var(--linea); border-radius: var(--radio); padding: 16px 20px; }
+  .msg.asistente.confirmar { border-left: 4px solid var(--ambar); }
+  .msg.asistente.falla { border-left: 4px solid var(--rojo); }
+  .aviso-confirmar { color: var(--ambar); font-weight: 700; font-size: .9rem; margin-bottom: 8px; }
+
+  .llamadas { margin: 0 0 14px; padding: 0; list-style: none; border-bottom: 1px solid var(--linea); padding-bottom: 10px; }
+  .llamada summary { display: grid; grid-template-columns: 10px auto 1fr; gap: 10px; align-items: baseline; padding: 4px 0; font-size: .9rem; cursor: pointer; list-style: none; }
+  .llamada summary::-webkit-details-marker { display: none; }
+  .punto { width: 8px; height: 8px; border-radius: 50%; background: var(--verde); align-self: center; }
+  .llamada.error .punto { background: var(--rojo); }
+  .llamada .nombre { font-weight: 600; }
+  .llamada .resumen { color: var(--tenue); overflow-wrap: anywhere; }
+  .llamada pre { margin: 4px 0 8px 20px; background: var(--lienzo); padding: 8px 10px; border-radius: 4px; font: .8rem/1.45 "Source Code Pro", ui-monospace, monospace; overflow-x: auto; }
+
+  .contenido > :first-child { margin-top: 0; } .contenido > :last-child { margin-bottom: 0; }
+  .contenido table { border-collapse: collapse; margin: 10px 0; font-size: .93rem; display: block; overflow-x: auto; }
+  .contenido th, .contenido td { border-bottom: 1px solid var(--linea); padding: 5px 12px 5px 0; text-align: left; vertical-align: top; }
+  .contenido th { font-weight: 600; }
+  .contenido h4 { margin: 14px 0 6px; font-size: 1rem; }
+  .contenido ul, .contenido ol { padding-left: 22px; }
+  .contenido code { background: var(--lienzo); padding: 1px 5px; border-radius: 3px; font-size: .88em; }
+
+  .pensando { color: var(--tenue); font-size: .95rem; }
+  .pensando i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--tenue); margin-left: 3px; animation: latido 1.2s infinite; }
+  .pensando i:nth-child(2) { animation-delay: .2s; } .pensando i:nth-child(3) { animation-delay: .4s; }
+  @keyframes latido { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .pensando i { animation: none; opacity: .6; } }
+
+  footer { border-top: 1px solid var(--linea); background: var(--lienzo); padding: 14px clamp(16px, 5vw, 56px) 18px; }
+  .decision { display: none; max-width: 860px; background: var(--ambar-suave); border: 1px solid #e9c99c; border-radius: var(--radio); padding: 12px 16px; margin-bottom: 12px; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .decision.visible { display: flex; }
+  .decision p { margin: 0; flex: 1 1 260px; font-weight: 600; color: #6e400a; }
+  .btn { border-radius: var(--radio); padding: 8px 16px; border: 1px solid transparent; }
+  .btn.principal { background: var(--verde); color: #fff; }
+  .btn.secundario { background: transparent; border-color: var(--ambar); color: #6e400a; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  form { display: flex; gap: 10px; max-width: 860px; }
+  textarea { flex: 1; resize: none; font: inherit; padding: 10px 14px; border: 1px solid var(--linea); border-radius: var(--radio); background: var(--superficie); min-height: 46px; max-height: 160px; color: var(--tinta); }
+  .error-red { color: var(--rojo); font-size: .9rem; margin: 0 0 8px; }
+
+  @media (max-width: 820px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    aside { border-right: 0; border-bottom: 1px solid var(--linea); padding: 16px; gap: 14px; }
+    .casos { grid-template-columns: repeat(3, 1fr); }
+    .caso span, .registros, aside p { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div>
+      <h1>Órdenes de compra</h1>
+      <p>El agente lee el paquete, lo valida contra los maestros y crea la OC en SAP solo cuando cumple o cuando tú lo confirmas.</p>
+    </div>
+    <section>
+      <h2>Solicitudes</h2>
+      <div class="casos" id="casos"></div>
+    </section>
+    <section class="registros">
+      <h2>Registros</h2>
+      <a href="#" data-ruta="out/control.csv">Log de control (control.csv)</a>
+      <a href="#" data-ruta="out/sap/ordenes.jsonl">Órdenes creadas en SAP</a>
+      <a href="#" data-ruta="out/log.jsonl">Llamadas a herramientas</a>
+    </section>
+    <div class="estado"><span id="modelo">Conectando…</span><br><button id="nueva">Empezar una sesión nueva</button></div>
+  </aside>
+  <main>
+    <div id="hilo" aria-live="polite">
+      <div class="vacio" id="vacio"><strong>Elige una solicitud o escribe una instrucción</strong>Por ejemplo: «Procesa la solicitud sol-004 y no la crees hasta que yo lo confirme».</div>
+    </div>
+    <footer>
+      <p class="error-red" id="errorRed" hidden></p>
+      <div class="decision" id="decision">
+        <p>El agente espera tu decisión antes de crear la orden.</p>
+        <button class="btn principal" id="confirmar">Confirmo, crear la OC</button>
+        <button class="btn secundario" id="rechazar">No crear todavía</button>
+      </div>
+      <form id="form">
+        <textarea id="entrada" rows="1" placeholder="Escribe una instrucción para el agente" maxlength="4000" aria-label="Mensaje"></textarea>
+        <button class="btn principal" id="enviar" type="submit">Enviar</button>
+      </form>
+    </footer>
+  </main>
+</div>
+<script>
+const $ = (id) => document.getElementById(id)
+const estado = { sesion: localStorage.getItem("oc-sesion"), clave: localStorage.getItem("oc-clave") || "", ocupado: false }
+const DESCRIPCIONES = { "sol-001": "Licencias antivirus", "sol-002": "Herramienta de pruebas", "sol-003": "Mobiliario nueva sede", "sol-004": "Horas de arquitectura nube", "sol-005": "Papelería y tóner", "sol-006": "Diademas mesa de soporte" }
+
+const cabeceras = () => ({ "content-type": "application/json", ...(estado.clave ? { "x-access-key": estado.clave } : {}) })
+const texto = (t) => { const s = document.createElement("span"); s.textContent = String(t ?? ""); return s.innerHTML }
+
+// Markdown mínimo y seguro: primero se escapa TODO el HTML; luego solo se generan etiquetas propias.
+const enLinea = (t) => texto(t).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>")
+const celdas = (fila) => fila.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim())
+function html(md) {
+  const lineas = String(md || "").split("\n"), salida = []
+  for (let i = 0; i < lineas.length; ) {
+    const l = lineas[i]
+    if (/^\s*\|/.test(l)) {
+      const filas = []; while (i < lineas.length && /^\s*\|/.test(lineas[i])) filas.push(lineas[i++])
+      const cuerpo = filas.filter((f, k) => !(k === 1 && /^[\s|:-]+$/.test(f)))
+      const [cab, ...resto] = cuerpo
+      salida.push(`<table><thead><tr>${celdas(cab).map((c) => `<th>${enLinea(c)}</th>`).join("")}</tr></thead><tbody>${resto.map((f) => `<tr>${celdas(f).map((c) => `<td>${enLinea(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`)
+    } else if (/^\s*([-*]|\d+\.)\s+/.test(l)) {
+      const ordenada = /^\s*\d+\./.test(l), items = []
+      while (i < lineas.length && /^\s*([-*]|\d+\.)\s+/.test(lineas[i])) items.push(lineas[i++].replace(/^\s*([-*]|\d+\.)\s+/, ""))
+      salida.push(`<${ordenada ? "ol" : "ul"}>${items.map((x) => `<li>${enLinea(x)}</li>`).join("")}</${ordenada ? "ol" : "ul"}>`)
+    } else if (/^#{1,4}\s/.test(l)) {
+      salida.push(`<h4>${enLinea(l.replace(/^#+\s/, ""))}</h4>`); i++
+    } else if (l.trim() === "") { i++ }
+    else {
+      const parrafo = []; while (i < lineas.length && lineas[i].trim() !== "" && !/^\s*(\||[-*]\s|\d+\.\s|#)/.test(lineas[i])) parrafo.push(lineas[i++])
+      if (parrafo.length) salida.push(`<p>${parrafo.map(enLinea).join("<br>")}</p>`); else i++
+    }
+  }
+  return salida.join("")
+}
+
+function pintarLlamadas(llamadas) {
+  if (!llamadas?.length) return ""
+  return `<ul class="llamadas">${llamadas.map((l) => `
+    <li><details class="llamada ${l.ok ? "" : "error"}">
+      <summary><span class="punto"></span><span class="nombre">${texto(l.nombre)}</span><span class="resumen">${texto(l.resumen)}</span></summary>
+      <pre>${texto(JSON.stringify(l.args, null, 2))}</pre>
+    </details></li>`).join("")}</ul>`
+}
+
+function agregar(turno) {
+  $("vacio")?.remove()
+  const div = document.createElement("div")
+  if (turno.rol === "usuario") {
+    div.className = "msg usuario"
+    div.textContent = turno.texto
+  } else {
+    div.className = `msg asistente${turno.pideConfirmacion ? " confirmar" : ""}${turno.error ? " falla" : ""}`
+    div.innerHTML = `${turno.pideConfirmacion ? '<div class="aviso-confirmar">Espera tu confirmación</div>' : ""}${pintarLlamadas(turno.llamadas)}<div class="contenido">${html(turno.texto)}</div>`
+  }
+  $("hilo").appendChild(div)
+  div.scrollIntoView({ block: "end" })
+}
+
+function ocupado(si) {
+  estado.ocupado = si
+  for (const id of ["enviar", "confirmar", "rechazar"]) $(id).disabled = si
+  document.querySelectorAll(".caso").forEach((b) => (b.disabled = si))
+  $("pensandoMsg")?.remove()
+  if (si) {
+    const p = document.createElement("div")
+    p.id = "pensandoMsg"; p.className = "msg pensando"; p.innerHTML = "El agente está revisando el paquete<i></i><i></i><i></i>"
+    $("hilo").appendChild(p); p.scrollIntoView({ block: "end" })
+  }
+}
+
+const decision = (visible) => $("decision").classList.toggle("visible", visible)
+
+async function enviar(mensaje) {
+  if (!mensaje.trim() || estado.ocupado) return
+  $("errorRed").hidden = true
+  decision(false)
+  agregar({ rol: "usuario", texto: mensaje })
+  ocupado(true)
+  try {
+    const r = await fetch("/api/chat", { method: "POST", headers: cabeceras(), body: JSON.stringify({ sessionId: estado.sesion, message: mensaje }) })
+    const datos = await r.json()
+    if (!r.ok) throw new Error(datos.error || `Error ${r.status}`)
+    estado.sesion = datos.sessionId; localStorage.setItem("oc-sesion", datos.sessionId)
+    ocupado(false)
+    agregar({ rol: "asistente", texto: datos.reply, llamadas: datos.toolCalls, pideConfirmacion: datos.needsConfirmation, error: datos.error })
+    decision(datos.needsConfirmation)
+  } catch (e) {
+    ocupado(false)
+    $("errorRed").textContent = `No se pudo enviar el mensaje: ${e.message}`
+    $("errorRed").hidden = false
+  }
+}
+
+async function restaurar() {
+  if (!estado.sesion) return
+  const r = await fetch(`/api/sessions/${estado.sesion}`, { headers: cabeceras() })
+  if (!r.ok) { estado.sesion = null; localStorage.removeItem("oc-sesion"); return }
+  const datos = await r.json()
+  datos.historial.forEach(agregar)
+  decision(datos.esperaConfirmacion)
+}
+
+async function iniciar() {
+  const salud = await fetch("/api/health").then((r) => r.json()).catch(() => null)
+  $("modelo").textContent = salud ? (salud.configurado ? `Modelo: ${salud.model}` : "El servidor no tiene clave del modelo configurada") : "Sin conexión con el servidor"
+  if (salud?.requiereClave && !estado.clave) {
+    estado.clave = prompt("Este agente está protegido. Escribe la clave de acceso (está en el README):") || ""
+    localStorage.setItem("oc-clave", estado.clave)
+  }
+  const casos = await fetch("/api/casos", { headers: cabeceras() }).then((r) => r.json()).catch(() => ({ casos: [] }))
+  $("casos").innerHTML = (casos.casos || []).map((c) => `<button class="caso" data-caso="${texto(c)}"><b>${texto(c)}</b><span>${texto(DESCRIPCIONES[c] || "")}</span></button>`).join("")
+  await restaurar()
+}
+
+$("casos").addEventListener("click", (e) => {
+  const b = e.target.closest(".caso")
+  if (b) enviar(`Procesa la solicitud "${b.dataset.caso}". Muéstrame la OC como quedaría en SAP y qué validaciones pasó y cuáles no.`)
+})
+document.querySelector(".registros").addEventListener("click", async (e) => {
+  const a = e.target.closest("a"); if (!a) return
+  e.preventDefault()
+  const r = await fetch(`/api/archivo?ruta=${encodeURIComponent(a.dataset.ruta)}`, { headers: cabeceras() })
+  if (!r.ok) { $("errorRed").textContent = "Ese registro aún no existe: procesa una solicitud primero."; $("errorRed").hidden = false; return }
+  const w = window.open("", "_blank"); w.document.write(`<pre style="font:13px/1.5 monospace;padding:16px">${texto(await r.text())}</pre>`)
+})
+$("form").addEventListener("submit", (e) => { e.preventDefault(); const t = $("entrada").value; $("entrada").value = ""; enviar(t) })
+$("entrada").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit() } })
+$("confirmar").addEventListener("click", () => enviar("Confirmo, crea la OC."))
+$("rechazar").addEventListener("click", () => enviar("No la crees todavía."))
+$("nueva").addEventListener("click", () => { localStorage.removeItem("oc-sesion"); location.reload() })
+iniciar()
+</script>
+</body>
+</html>
