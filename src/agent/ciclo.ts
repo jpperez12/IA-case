@@ -7,8 +7,9 @@ import type { LlamadaVisible, Sesion } from "./sesiones.ts"
 export type RespuestaTurno = { reply: string; toolCalls: LlamadaVisible[]; needsConfirmation: boolean; error?: boolean }
 export type Dependencias = { llm: LlmAdapter; config: Config; system: string; raiz: string }
 
-const POSITIVO = /^\s*(s[ií]|confirmo|confirmada?|confirmado|adelante|procede|proceder|dale|ok|okay|de acuerdo|cr[eé]ala|cr[eé]alas|autorizo|apruebo)\b/i
-const NEGATIVO = /\b(no|espera|todav[ií]a|cancela|cancelar|detente|aun no|aún no)\b/i
+// Límites de palabra con soporte Unicode: \b de JavaScript no trata "í" como letra y fallaba con "Sí".
+const POSITIVO = /^\s*¡?(s[ií]|confirmo|confirmada?|confirmado|adelante|procede|proceder|dale|ok|okay|de acuerdo|cr[eé]ala|cr[eé]alas|autorizo|apruebo)(?![\p{L}\p{N}])/iu
+const NEGATIVO = /(?<![\p{L}\p{N}])(no|espera|todav[ií]a|cancela|cancelar|detente)(?![\p{L}\p{N}])/iu
 
 /** CA3: solo cuenta como confirmación una respuesta afirmativa explícita a una pregunta pendiente. */
 export const esConfirmacion = (texto: string): boolean => POSITIVO.test(texto) && !NEGATIVO.test(texto)
@@ -28,6 +29,18 @@ function pideConfirmacion(ejecuciones: Ejecucion[], textoFinal: string): boolean
   const pendiente = ejecuciones.some((e) => e.nombre === "oc_crear" && !e.ok && /confirmaci[oó]n|confirmado=true/i.test(leer(e).error ?? ""))
   const aptaSinCrear = !creo && ejecuciones.some((e) => e.nombre === "oc_validar" && leer(e).data?.apta === true)
   return !creo && (pendiente || (aptaSinCrear && textoFinal.trim().endsWith("?")))
+}
+
+/**
+ * CA2 en el backend: si en este turno oc_crear falló y ninguna llamada creó la OC, el texto del modelo no puede
+ * afirmar que la OC fue creada. Si lo hace, se reemplaza por lo que realmente devolvió la herramienta.
+ */
+function sinAfirmacionesFalsas(ejecuciones: Ejecucion[], texto: string): string {
+  const crear = ejecuciones.filter((e) => e.nombre === "oc_crear")
+  if (crear.length === 0 || crear.some((e) => e.ok)) return texto
+  if (!/(cread[ao]|generad[ao]|registrad[ao] en sap|n[uú]mero de oc|\b45\d{8}\b)/i.test(texto)) return texto
+  const ultimo = leer(crear[crear.length - 1]!).error ?? "la herramienta no creó la OC"
+  return `**La OC no se creó.** ${ultimo}\n\n¿Confirmas la creación? Responde "sí" o "confirmo".`
 }
 
 const AVISO_TOPE = "[Sistema] Se alcanzó el tope de iteraciones de este turno. Responde con lo que ya tienes y di qué falta, sin llamar más herramientas."
@@ -64,6 +77,7 @@ export async function ejecutarTurno(sesion: Sesion, texto: string, d: Dependenci
       if (i + 1 >= d.config.maxIteraciones) resultados.push({ tipo: "texto", texto: AVISO_TOPE })
       sesion.mensajes.push({ rol: "usuario", bloques: resultados })
     }
+    final = sinAfirmacionesFalsas(ejecuciones, final)
     const needsConfirmation = pideConfirmacion(ejecuciones, final)
     sesion.esperaConfirmacion = needsConfirmation
     return { reply: final || "(sin respuesta del modelo)", toolCalls: ejecuciones.map(visible), needsConfirmation }

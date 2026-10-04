@@ -63,7 +63,7 @@ El demo limpia `out/`, procesa los 6 casos llamando directamente a las herramien
 
 1. Sube este repositorio a GitHub.
 2. En Render: **New → Blueprint** y elige el repositorio. Render lee `render.yaml` y construye el `Dockerfile`.
-3. Render pide `GEMINI_API_KEY` y `ACCESS_KEY`: escríbelas ahí, nunca en el repositorio.
+3. Render pide `GEMINI_API_KEY` y `ACCESS_KEY`: escríbelas ahí, nunca en el repositorio. Agrega además `LLM_MODEL=gemini-3.1-flash-lite` y `MAX_TOKENS_SESION=1500000`.
 4. Copia la URL pública en este README.
 
 El plan gratuito de Render apaga el servicio tras unos 15 minutos sin uso: el primer acceso tarda cerca de un minuto. Ábrelo antes de la defensa. Su disco no es persistente, así que `out/` se reinicia con cada despliegue.
@@ -99,4 +99,4 @@ demo.ts                         verificación sin modelo
 
 ## Proveedor del modelo
 
-El link público usa **Google Gemini** (`gemini-3.1-flash-lite`) en su nivel gratuito, que permite unas 15 solicitudes por minuto. Un caso usa entre 4 y 6, así que si se procesan varios casos seguidos el agente puede pedir esperar un minuto. Con `ANTHROPIC_API_KEY` y `LLM_PROVIDER=anthropic` usa Claude, sin tocar el código del agente.
+El link público usa **Google Gemini** (`gemini-3.1-flash-lite`, fijado con `LLM_MODEL`) en su nivel gratuito, que permite unas 15 solicitudes por minuto. Un caso usa entre 4 y 6, así que si se procesan varios casos seguidos el agente puede pedir esperar un minuto. Con `ANTHROPIC_API_KEY` y `LLM_PROVIDER=anthropic` usa Claude, sin tocar el código del agente.

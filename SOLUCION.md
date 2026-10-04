@@ -62,10 +62,11 @@ La interfaz `LlmAdapter` (`enviar(mensajes, herramientas) → respuesta`) tiene 
 | `src/llm/anthropic.ts` | Anthropic (API de Mensajes) | `claude-sonnet-4-6` |
 | `src/llm/openai-compatible.ts` | Google Gemini (endpoint compatible con OpenAI); sirve igual para OpenAI, Groq u OpenRouter | `gemini-flash-latest` |
 
-**El link público usa Gemini Flash en su nivel gratuito.**
+**El link público usa `gemini-3.1-flash-lite` en el nivel gratuito de Gemini** (fijado con `LLM_MODEL`).
 - Para una prueba con datos ficticios, costo cero.
 - Uso de herramientas suficiente para este flujo, que es corto y está guiado por reglas deterministas.
-- El alias `-latest` evita depender de una versión que Google retire. La familia 2.5, por ejemplo, tiene retiro anunciado para octubre de 2026.
+- Es un modelo estable. Empecé con el alias `gemini-flash-latest`, pero apuntaba a una versión *preview* que fallaba por saturación; con un modelo estable fijado por variable de entorno, el cambio no tocó el código.
+- Los modelos Gemini 3 exigen reenviar una firma de razonamiento (`thought_signature`) en cada llamada a herramienta. El adaptador la guarda en el bloque de la llamada y la devuelve tal cual; el ciclo no se enteró del cambio.
 - Las limitaciones son reales: unas 15 solicitudes por minuto, y en el nivel gratuito Google puede usar las entradas para mejorar sus modelos. Por eso **no sirve para producción** con datos reales de proveedores.
 
 **Para producción recomendaría Claude Sonnet**, por la confiabilidad del uso de herramientas en flujos de varios pasos, el español de negocio y la caché de prompt.
@@ -227,6 +228,7 @@ Lo que se descartó o corrigió de lo propuesto:
 - Librerías de markdown por CDN: se reemplazaron por un renderizador propio (decisión 6).
 - El primer recorte de la descripción a 40 caracteres dejaba textos como "…para la mesa de": se corrigió para no terminar en conectores.
 - La primera recomendación de RC2 en `sol-003` no decía que ningún aprobador de CC-2020 tenía tope suficiente; se agregó.
+- En las pruebas sobre el link desplegado apareció un error: la usuaria respondió "Sí" y el backend no lo reconoció, porque el límite de palabra `\b` de JavaScript no trata la "í" como letra. El modelo reintentó, la herramienta lo rechazó tres veces, y aun así escribió que la OC estaba creada. Corregí el reconocimiento con expresiones Unicode y agregué un control en el backend: si en un turno `oc_crear` no creó nada, el texto del modelo no puede afirmar lo contrario y se reemplaza por el resultado real. Ambos casos quedaron como pruebas en `scripts/prueba-ciclo.ts`.
 
 Revisé cada archivo y puedo explicar cada línea.
 
@@ -235,6 +237,7 @@ Revisé cada archivo y puedo explicar cada línea.
 | Riesgo | Mitigación |
 |---|---|
 | El modelo altera un monto o un código | Las herramientas son la única fuente de valores y `oc_crear` rechaza payloads distintos al construido |
+| El modelo afirma un resultado que no ocurrió (ej. "OC creada") | El backend contrasta el texto con el resultado de `oc_crear` del turno y corrige la respuesta; la UI muestra siempre el resultado real de cada herramienta |
 | Confirmación falsa ("sí" ambiguo o del propio modelo) | La confirmación la decide el backend con el mensaje del usuario; en producción, además, un botón con identidad autenticada |
 | Formatos reales de cotización muy variados | Mantener la extracción determinista para total y fechas; usar el modelo solo como respaldo con confianza baja, que siempre pida confirmación |
 | Maestros desactualizados | Consultar proveedor y centro en SAP en tiempo real con el mismo adaptador |

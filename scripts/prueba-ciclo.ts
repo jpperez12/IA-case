@@ -5,7 +5,7 @@
  */
 import { rmSync } from "node:fs"
 import { join } from "node:path"
-import { ejecutarTurno, type Dependencias } from "../src/agent/ciclo.ts"
+import { esConfirmacion, ejecutarTurno, type Dependencias } from "../src/agent/ciclo.ts"
 import { leerConfig } from "../src/agent/config.ts"
 import { nuevaSesion } from "../src/agent/sesiones.ts"
 import { ErrorLlm, type LlmAdapter, type RespuestaLlm } from "../src/llm/adapter.ts"
@@ -46,10 +46,16 @@ const t1 = await ejecutarTurno(sesion, "Procesa la sol-004 y no la crees hasta q
 verificar(t1.toolCalls.at(-1)?.ok === false, "el modelo no puede confirmarse a sí mismo (oc_crear rechazado)")
 verificar(t1.needsConfirmation, "el turno queda esperando confirmación")
 
-// Turno 2: la usuaria confirma → ahora sí se crea.
-const t2 = await ejecutarTurno(sesion, "Confirmo, créala", deps([llamada("oc_crear", { ...caso, confirmado: true }), texto("OC 4500000001 creada.")]))
-verificar(t2.toolCalls[0]?.ok === true && /4500000001/.test(t2.toolCalls[0].resumen), "tras confirmar, la OC se crea con número 4500000001")
+// Turno 2: la usuaria responde "Sí" (con tilde) → cuenta como confirmación y se crea.
+const t2 = await ejecutarTurno(sesion, "Sí", deps([llamada("oc_crear", { ...caso, confirmado: true }), texto("OC 4500000001 creada.")]))
+verificar(t2.toolCalls[0]?.ok === true && /4500000001/.test(t2.toolCalls[0].resumen), "\"Sí\" con tilde cuenta como confirmación: se crea la OC 4500000001")
 verificar(!t2.needsConfirmation, "ya no espera confirmación")
+
+// Turno 2b: el modelo afirma haber creado una OC que la herramienta rechazó → el backend corrige el texto.
+const s2 = nuevaSesion()
+const falso = await ejecutarTurno(s2, "Procesa la sol-006", deps([llamada("oc_crear", { caso: "sol-006", confirmado: true }), texto("OC creada. Número de OC: 4500000009.")]))
+verificar(falso.reply.startsWith("**La OC no se creó.**") && !/4500000009/.test(falso.reply), "el agente no puede afirmar una OC que no se creó")
+verificar(["sí", "Sí, créala", "¡Sí!", "si", "confirmo"].every(esConfirmacion) && !["sí, pero todavía no", "no", "Sinceramente no"].some(esConfirmacion), "reconoce confirmaciones con tilde y rechaza negaciones")
 
 // Turno 3: el proveedor falla → mensaje claro y la sesión sigue viva.
 const largo = sesion.mensajes.length
