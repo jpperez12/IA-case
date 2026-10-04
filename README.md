@@ -2,8 +2,8 @@
 
 Agente que lee el paquete de compra (solicitud, cotización, aprobación y factura si existe), lo valida contra los maestros con las reglas RC1–RC10, muestra la OC tal como quedaría en SAP, genera la evidencia de aprobación y crea la OC en un SAP simulado. Las excepciones se bloquean o se devuelven a la analista para su confirmación.
 
-- **Link de prueba:** `<URL de Render>` — completar tras el despliegue
-- **Clave de acceso al link:** `<ACCESS_KEY>` — el front la pide al abrir
+- **Link de prueba:** https://agente-ordenes-compra.onrender.com
+- **Clave de acceso al link:** Periferia2026 — el front la pide al abrir
 
 ## Requisitos
 
@@ -99,4 +99,4 @@ demo.ts                         verificación sin modelo
 
 ## Proveedor del modelo
 
-El link público usa **Google Gemini** (`gemini-flash-latest`) en su nivel gratuito, que permite unas 15 solicitudes por minuto. Un caso usa entre 4 y 6, así que si se procesan varios casos seguidos el agente puede pedir esperar un minuto. Con `ANTHROPIC_API_KEY` y `LLM_PROVIDER=anthropic` usa Claude, sin tocar el código del agente.
+El link público usa **Google Gemini** (`gemini-3.1-flash-lite`) en su nivel gratuito, que permite unas 15 solicitudes por minuto. Un caso usa entre 4 y 6, así que si se procesan varios casos seguidos el agente puede pedir esperar un minuto. Con `ANTHROPIC_API_KEY` y `LLM_PROVIDER=anthropic` usa Claude, sin tocar el código del agente.
