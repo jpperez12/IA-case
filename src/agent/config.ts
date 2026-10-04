@@ -1,13 +1,17 @@
-/** Toda la configuración sale de variables de entorno (ver .env.example). La clave nunca se expone. */
+/** Toda la configuración sale de variables de entorno (ver .env.example). Las claves nunca se exponen. */
 const entero = (nombre: string, porDefecto: number): number => {
   const v = Number(process.env[nombre])
   return Number.isFinite(v) && v > 0 ? v : porDefecto
 }
 
+/** Modelo por defecto de cada proveedor; LLM_MODEL lo reemplaza. */
+const MODELOS: Record<string, string> = { anthropic: "claude-sonnet-4-6", gemini: "gemini-flash-latest" }
+
 export type Config = {
   proveedor: string
   modelo: string
   claveAnthropic: string | undefined
+  claveGemini: string | undefined
   timeoutMs: number
   maxIteraciones: number
   maxTokensSesion: number
@@ -17,10 +21,15 @@ export type Config = {
 }
 
 export function leerConfig(): Config {
+  const claveAnthropic = process.env.ANTHROPIC_API_KEY || undefined
+  const claveGemini = process.env.GEMINI_API_KEY || undefined
+  // Si no se fija LLM_PROVIDER, se usa el proveedor cuya clave esté configurada.
+  const proveedor = process.env.LLM_PROVIDER || (claveAnthropic ? "anthropic" : claveGemini ? "gemini" : "anthropic")
   return {
-    proveedor: process.env.LLM_PROVIDER ?? "anthropic",
-    modelo: process.env.LLM_MODEL ?? "claude-sonnet-4-6",
-    claveAnthropic: process.env.ANTHROPIC_API_KEY || undefined,
+    proveedor,
+    modelo: process.env.LLM_MODEL || MODELOS[proveedor] || "",
+    claveAnthropic,
+    claveGemini,
     timeoutMs: entero("LLM_TIMEOUT_MS", 60_000),
     maxIteraciones: entero("MAX_ITERACIONES", 25),
     maxTokensSesion: entero("MAX_TOKENS_SESION", 300_000),

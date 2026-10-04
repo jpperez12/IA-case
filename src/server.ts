@@ -40,7 +40,7 @@ async function leerCuerpo(req: IncomingMessage): Promise<unknown> {
 const autorizado = (req: IncomingMessage): boolean => !config.claveAcceso || req.headers["x-access-key"] === config.claveAcceso
 
 async function chat(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  if (!llm) return json(res, 503, { error: "El servidor no tiene configurada la clave del modelo (ANTHROPIC_API_KEY)." })
+  if (!llm) return json(res, 503, { error: "El servidor no tiene configurada la clave del modelo (GEMINI_API_KEY o ANTHROPIC_API_KEY)." })
   let cuerpo: { sessionId?: unknown; message?: unknown }
   try {
     cuerpo = (await leerCuerpo(req)) as typeof cuerpo
@@ -104,5 +104,5 @@ const servidor = createServer(async (req, res) => {
 
 servidor.listen(config.puerto, () => {
   console.log(`Agente OC escuchando en http://localhost:${config.puerto} · proveedor ${config.proveedor} · modelo ${config.modelo}`)
-  if (!llm) console.warn("Sin ANTHROPIC_API_KEY: el chat responderá 503 hasta configurarla. demo.ts funciona sin clave.")
+  if (!llm) console.warn("Sin clave del modelo (GEMINI_API_KEY o ANTHROPIC_API_KEY): el chat responderá 503 hasta configurarla. demo.ts funciona sin clave.")
 })

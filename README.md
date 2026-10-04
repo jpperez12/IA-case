@@ -12,7 +12,7 @@ Agente que lee el paquete de compra (solicitud, cotización, aprobación y factu
 ## Levantar en local (un comando)
 
 ```bash
-cp .env.example .env        # y escribe tu ANTHROPIC_API_KEY
+cp .env.example .env        # y escribe tu GEMINI_API_KEY (gratis) o ANTHROPIC_API_KEY
 bun install && bun run dev  # front + backend en http://localhost:3000
 ```
 
@@ -38,9 +38,11 @@ El demo limpia `out/`, procesa los 6 casos llamando directamente a las herramien
 
 | Variable | Obligatoria | Uso |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Para el chat | Clave del modelo. Solo vive en el servidor |
+| `GEMINI_API_KEY` | Para el chat (una de las dos) | Clave de Google Gemini, nivel gratuito. Se obtiene en aistudio.google.com |
+| `ANTHROPIC_API_KEY` | Para el chat (una de las dos) | Clave de Anthropic, pago por uso. Se obtiene en console.anthropic.com |
+| `LLM_PROVIDER` | No | `gemini` o `anthropic`. Si se omite, se usa el que tenga clave |
 | `ACCESS_KEY` | Recomendada en el link | Si se define, la API exige esta clave (cabecera `x-access-key`) y el front la pide al abrir |
-| `LLM_MODEL` | No | Por defecto `claude-sonnet-4-6` |
+| `LLM_MODEL` | No | Por defecto `gemini-flash-latest` (Gemini) o `claude-sonnet-4-6` (Anthropic) |
 | `MAX_ITERACIONES` | No | Tope de llamadas herramienta → modelo por turno (25) |
 | `MAX_TOKENS_SESION` | No | Tope de tokens por sesión (300.000) |
 | `MAX_TOKENS_RESPUESTA` | No | Máximo de tokens por respuesta del modelo (4.096) |
@@ -61,7 +63,7 @@ El demo limpia `out/`, procesa los 6 casos llamando directamente a las herramien
 
 1. Sube este repositorio a GitHub.
 2. En Render: **New → Blueprint** y elige el repositorio. Render lee `render.yaml` y construye el `Dockerfile`.
-3. En las variables del servicio, carga `ANTHROPIC_API_KEY` y `ACCESS_KEY`.
+3. Render pide `GEMINI_API_KEY` y `ACCESS_KEY`: escríbelas ahí, nunca en el repositorio.
 4. Copia la URL pública en este README.
 
 El plan gratuito de Render apaga el servicio tras unos 15 minutos sin uso: el primer acceso tarda cerca de un minuto. Ábrelo antes de la defensa. Su disco no es persistente, así que `out/` se reinicia con cada despliegue.
@@ -75,7 +77,8 @@ src/tools/oc.ts                 herramientas oc_* (zod, nunca lanzan)
 src/tools/registro.ts           registro, validación de argumentos y log de llamadas
 src/dominio/                    lectura del paquete, reglas RC1–RC10, payload, evidencia, control
 src/sap/adapter.ts · mock.ts    interfaz SapAdapter y SAP simulado sobre out/sap/
-src/llm/adapter.ts · anthropic.ts  interfaz del proveedor y su implementación
+src/llm/adapter.ts               interfaz del proveedor
+src/llm/anthropic.ts · openai-compatible.ts  implementaciones (Claude; Gemini y compatibles)
 src/agent/                      ciclo del agente, sesiones, configuración
 src/server.ts                   API HTTP y front
 web/index.html                  chat
@@ -93,3 +96,7 @@ demo.ts                         verificación sin modelo
 | `out/sap/ordenes.jsonl` | Órdenes creadas en el SAP simulado |
 | `out/control.csv` | Un registro por intento de creación, con `retroactiva` |
 | `out/log.jsonl` | Todas las llamadas a herramientas |
+
+## Proveedor del modelo
+
+El link público usa **Google Gemini** (`gemini-flash-latest`) en su nivel gratuito, que permite unas 15 solicitudes por minuto. Un caso usa entre 4 y 6, así que si se procesan varios casos seguidos el agente puede pedir esperar un minuto. Con `ANTHROPIC_API_KEY` y `LLM_PROVIDER=anthropic` usa Claude, sin tocar el código del agente.

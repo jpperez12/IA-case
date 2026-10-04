@@ -12,7 +12,8 @@ La analista administrativa transcribe a mano en SAP cada orden de compra y valid
 │ chat, tool calls,│ ◀──────────────── │   └─ src/agent/ciclo.ts                      │
 │ barra confirmar  │  reply, toolCalls,│        prompt → LLM → herramientas → LLM …   │
 └──────────────────┘  needsConfirmation│        ├─ src/llm/adapter.ts (interfaz)      │
-                                       │        │    └─ anthropic.ts (implementación) │
+                                       │        │    ├─ anthropic.ts                  │
+                                       │        │    └─ openai-compatible.ts (Gemini) │
                                        │        └─ src/tools/registro.ts (zod + log)  │
                                        │             └─ src/tools/oc.ts (oc_*)        │
                                        │                  └─ src/dominio/ (reglas)    │
@@ -54,20 +55,27 @@ El servidor no contiene reglas de negocio. Un cambio de umbral (por ejemplo, la 
 
 ## 4. Elección del modelo
 
-| | |
-|---|---|
-| Proveedor | Anthropic (API de Mensajes, vía `fetch`, sin SDK) |
-| Modelo | `claude-sonnet-4-6`, configurable con `LLM_MODEL` |
-| Por qué | Uso de herramientas confiable en flujos de varios pasos, buen español de negocio y caché de prompt, que abarata el system prompt y las herramientas repetidas en cada iteración |
+La interfaz `LlmAdapter` (`enviar(mensajes, herramientas) → respuesta`) tiene dos implementaciones, y el proveedor se elige con variables de entorno, sin tocar el ciclo:
 
-**Costo estimado por caso.**
+| Implementación | Proveedores | Modelo por defecto |
+|---|---|---|
+| `src/llm/anthropic.ts` | Anthropic (API de Mensajes) | `claude-sonnet-4-6` |
+| `src/llm/openai-compatible.ts` | Google Gemini (endpoint compatible con OpenAI); sirve igual para OpenAI, Groq u OpenRouter | `gemini-flash-latest` |
 
-- El system prompt más las herramientas suman unos 3.000 tokens, y un caso típico usa 5 o 6 llamadas al modelo.
+**El link público usa Gemini Flash en su nivel gratuito.**
+- Para una prueba con datos ficticios, costo cero.
+- Uso de herramientas suficiente para este flujo, que es corto y está guiado por reglas deterministas.
+- El alias `-latest` evita depender de una versión que Google retire. La familia 2.5, por ejemplo, tiene retiro anunciado para octubre de 2026.
+- Las limitaciones son reales: unas 15 solicitudes por minuto, y en el nivel gratuito Google puede usar las entradas para mejorar sus modelos. Por eso **no sirve para producción** con datos reales de proveedores.
+
+**Para producción recomendaría Claude Sonnet**, por la confiabilidad del uso de herramientas en flujos de varios pasos, el español de negocio y la caché de prompt.
+
+**Costo estimado por caso con Claude Sonnet 4.6.**
+- El system prompt más las herramientas suman unos 3.000 tokens, y un caso típico usa 5 o 6 llamadas.
 - En total son unos 27.000 tokens de entrada, de los cuales unos 18.000 se leen de caché a 10 % del precio, y unos 1.500 de salida.
-- A los precios de lista de Sonnet 4.6 (USD 3 por millón de entrada y USD 15 por millón de salida), queda en **≈ USD 0,05–0,10 por caso**.
-- Con `claude-haiku-4-5` sería cerca de un tercio, con algo menos de calidad en la redacción de recomendaciones.
+- Con USD 3 por millón de entrada y USD 15 por millón de salida, queda en **≈ USD 0,05–0,10 por caso**. `claude-haiku-4-5` costaría cerca de un tercio.
 
-El consumo real queda en `sesion.tokens`.
+El consumo real de cada sesión queda en `sesion.tokens`.
 
 ## 5. Matriz de controles
 
@@ -161,7 +169,10 @@ Mi propuesta a la dirección:
 3. **Extracción determinista (regex) de cotización y factura, no con el modelo.**
    - El total y las fechas alimentan controles de bloqueo, así que deben ser reproducibles y testeables en `demo.ts`.
    - Descarté extraerlos con el LLM: toleraría formatos más variados, pero rompe el determinismo y deja de servir sin clave.
-4. **`fetch` directo a la API en lugar del SDK.** Una dependencia menos y control total del timeout y de los mensajes de error. El costo es mantener los tipos mínimos de la API a mano.
+4. **`fetch` directo a la API en lugar del SDK, y un adaptador compatible con OpenAI.**
+   - Una dependencia menos y control total del timeout y de los mensajes de error.
+   - El adaptador compatible con OpenAI cubre Gemini, OpenAI, Groq y OpenRouter con un solo archivo; descarté un SDK por proveedor.
+   - Costo: mantener a mano los tipos mínimos de cada API. Gemini acepta solo un subconjunto de JSON Schema, así que el adaptador simplifica los esquemas; la validación completa la sigue haciendo `zod` en el backend.
 5. **`node:http` en lugar de un framework.** Son seis rutas. Funciona igual en Bun y en Node, y no suma dependencias.
 6. **Renderizado de markdown propio en el front.** Primero usé librerías por CDN. Las cambié porque, si el CDN falla durante la defensa, el chat no muestra respuestas. El renderizador escapa todo el HTML antes de formatear, así que es seguro por construcción.
 7. **Precios con IVA incluido en el payload, igual que la solicitud.** Es fiel a los fixtures, que dan los precios así. En el adaptador real se convierten a precio neto (sección 6).
@@ -228,6 +239,7 @@ Revisé cada archivo y puedo explicar cada línea.
 | Formatos reales de cotización muy variados | Mantener la extracción determinista para total y fechas; usar el modelo solo como respaldo con confianza baja, que siempre pida confirmación |
 | Maestros desactualizados | Consultar proveedor y centro en SAP en tiempo real con el mismo adaptador |
 | Correo de aprobación falsificado | Validar el remitente con los encabezados del correo (DKIM/SPF) o mover la aprobación a un flujo con firma; auditoría puede exigir firma digital |
+| Nivel gratuito del proveedor (límite por minuto, uso de datos para entrenamiento) | Solo para la demo con datos ficticios; en producción, plan pago con retención cero de datos |
 | Costo descontrolado de la clave | Topes de iteraciones, tokens por sesión y respuesta, y clave de acceso al link; en producción, límites por usuario |
 | Datos personales en logs | Los logs guardan argumentos recortados y resúmenes; en producción, retención definida y enmascaramiento de correos |
 | Inyección de instrucciones dentro de un correo o cotización | El texto del paquete es solo dato; las acciones con efecto pasan por reglas deterministas y confirmación humana |
