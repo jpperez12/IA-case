@@ -2,7 +2,8 @@ import type { EspecHerramienta } from "../tools/registro.ts"
 
 /** Formato de conversación propio, independiente del proveedor. Cada adaptador lo traduce al suyo. */
 export type BloqueTexto = { tipo: "texto"; texto: string }
-export type BloqueLlamada = { tipo: "llamada"; id: string; nombre: string; args: unknown }
+/** meta: datos opacos del proveedor que deben reenviarse tal cual (p. ej. la firma de razonamiento de Gemini 3). */
+export type BloqueLlamada = { tipo: "llamada"; id: string; nombre: string; args: unknown; meta?: Record<string, unknown> }
 export type BloqueResultado = { tipo: "resultado"; id: string; contenido: string; esError: boolean }
 export type Bloque = BloqueTexto | BloqueLlamada | BloqueResultado
 
