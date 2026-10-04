@@ -7,7 +7,8 @@ import { ErrorLlm, type LlmAdapter, type Mensaje, type OpcionesEnvio, type Respu
  * solo cambian la URL base, la clave y el modelo.
  */
 
-type LlamadaApi = { id?: string; type: "function"; function: { name: string; arguments: string } }
+// extra_content: Gemini 3 devuelve ahí la firma de razonamiento y exige recibirla de vuelta en el siguiente turno.
+type LlamadaApi = { id?: string; type: "function"; function: { name: string; arguments: string }; extra_content?: Record<string, unknown> }
 type MensajeApi =
   | { role: "system" | "user"; content: string }
   | { role: "assistant"; content: string | null; tool_calls?: LlamadaApi[] }
@@ -46,7 +47,9 @@ function aApi(system: string, mensajes: Mensaje[]): MensajeApi[] {
       salida.push({
         role: "assistant",
         content: texto || null,
-        ...(llamadas.length ? { tool_calls: llamadas.map((l) => ({ id: l.id, type: "function" as const, function: { name: l.nombre, arguments: JSON.stringify(l.args ?? {}) } })) } : {}),
+        ...(llamadas.length
+          ? { tool_calls: llamadas.map((l): LlamadaApi => ({ id: l.id, type: "function", function: { name: l.nombre, arguments: JSON.stringify(l.args ?? {}) }, ...(l.meta ? { extra_content: l.meta } : {}) })) }
+          : {}),
       })
       continue
     }
@@ -66,12 +69,17 @@ function leerArgs(texto: string): unknown {
   }
 }
 
-function mensajeDeError(estado: number): string {
-  if (estado === 401 || estado === 403) return "La clave del proveedor de IA no es válida. Revisa la variable de la clave en el servidor."
-  if (estado === 429) return "Se alcanzó el límite de solicitudes por minuto del proveedor de IA (nivel gratuito). Espera un minuto e intenta de nuevo."
-  if (estado >= 500) return "El proveedor de IA está temporalmente no disponible. Intenta de nuevo en un momento."
-  return `El proveedor de IA rechazó la solicitud (${estado}).`
+function mensajeDeError(estado: number, detalle: string): string {
+  if (estado === 401 || estado === 403) return `La clave del proveedor de IA no es válida o no tiene acceso al modelo (${estado}).`
+  if (estado === 404) return "El modelo configurado no existe para esta clave. Revisa LLM_MODEL en el servidor."
+  if (estado === 429) return "Se alcanzó el límite de solicitudes del proveedor de IA (nivel gratuito). Espera un minuto e intenta de nuevo."
+  if (estado >= 500) return `El proveedor de IA está temporalmente no disponible (${estado}). Intenta de nuevo en un momento.`
+  return `El proveedor de IA rechazó la solicitud (${estado}): ${detalle.slice(0, 200)}`
 }
+
+const REINTENTABLE = new Set([500, 502, 503, 504])
+const ESPERAS_MS = [1500, 4000]
+const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 export class OpenAiCompatibleAdapter implements LlmAdapter {
   constructor(
@@ -82,6 +90,28 @@ export class OpenAiCompatibleAdapter implements LlmAdapter {
     private readonly timeoutMs: number,
   ) {}
 
+  /** Los errores 5xx del proveedor suelen ser pasajeros (saturación): se reintenta dos veces con espera creciente. */
+  private async llamarConReintentos(cuerpo: string): Promise<Response> {
+    for (let intento = 0; ; intento++) {
+      let respuesta: Response
+      try {
+        respuesta = await fetch(`${this.urlBase}/chat/completions`, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${this.clave}` },
+          body: cuerpo,
+          signal: AbortSignal.timeout(this.timeoutMs),
+        })
+      } catch (e) {
+        const timeout = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")
+        throw new ErrorLlm(timeout ? `El proveedor de IA no respondió en ${this.timeoutMs / 1000} s. Intenta de nuevo.` : "No hubo conexión con el proveedor de IA.")
+      }
+      const espera = ESPERAS_MS[intento]
+      if (!REINTENTABLE.has(respuesta.status) || espera === undefined) return respuesta
+      console.warn(`[llm] ${this.proveedor} respondió ${respuesta.status}; reintento ${intento + 1} en ${espera} ms`)
+      await esperar(espera)
+    }
+  }
+
   async enviar(mensajes: Mensaje[], herramientas: EspecHerramienta[], opciones: OpcionesEnvio): Promise<RespuestaLlm> {
     const cuerpo = {
       model: this.modelo,
@@ -90,26 +120,26 @@ export class OpenAiCompatibleAdapter implements LlmAdapter {
       tools: herramientas.map((h) => ({ type: "function", function: { name: h.nombre, description: h.descripcion, parameters: simplificarEsquema(h.esquema) } })),
       ...(opciones.soloTexto ? { tool_choice: "none" } : {}),
     }
-    let respuesta: Response
-    try {
-      respuesta = await fetch(`${this.urlBase}/chat/completions`, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${this.clave}` },
-        body: JSON.stringify(cuerpo),
-        signal: AbortSignal.timeout(this.timeoutMs),
-      })
-    } catch (e) {
-      const timeout = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")
-      throw new ErrorLlm(timeout ? `El proveedor de IA no respondió en ${this.timeoutMs / 1000} s. Intenta de nuevo.` : "No hubo conexión con el proveedor de IA.")
+    const respuesta = await this.llamarConReintentos(JSON.stringify(cuerpo))
+    if (!respuesta.ok) {
+      // El detalle del proveedor va al log del servidor (nunca incluye la clave) para poder diagnosticar.
+      const detalle = (await respuesta.text().catch(() => "")).slice(0, 1000)
+      console.error(`[llm] ${this.proveedor} ${this.modelo} respondió ${respuesta.status}: ${detalle}`)
+      throw new ErrorLlm(mensajeDeError(respuesta.status, detalle))
     }
-    if (!respuesta.ok) throw new ErrorLlm(mensajeDeError(respuesta.status))
 
     const datos = (await respuesta.json()) as RespuestaApi
     const eleccion = datos.choices?.[0]
     const llamadas = eleccion?.message?.tool_calls ?? []
     const bloques: RespuestaLlm["bloques"] = [
       ...(eleccion?.message?.content ? [{ tipo: "texto" as const, texto: eleccion.message.content }] : []),
-      ...llamadas.map((l, i) => ({ tipo: "llamada" as const, id: l.id || `llamada_${Date.now()}_${i}`, nombre: l.function.name, args: leerArgs(l.function.arguments) })),
+      ...llamadas.map((l, i) => ({
+        tipo: "llamada" as const,
+        id: l.id || `llamada_${Date.now()}_${i}`,
+        nombre: l.function.name,
+        args: leerArgs(l.function.arguments),
+        ...(l.extra_content ? { meta: l.extra_content } : {}),
+      })),
     ]
     return {
       bloques,
